@@ -1,0 +1,16 @@
+{
+  "name": "ultimate-discord-bot",
+  "version": "1.0.0",
+  "description": "Full moderation/custom/music/fun discord bot",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@discordjs/voice": "^0.17.0",
+    "discord.js": "^14.14.1",
+"dotenv": "^16.4.5",
+    "fs": "^0.0.1-security",
+    "play-dl": "^1.9.7"
+  }
+}
