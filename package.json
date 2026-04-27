@@ -1,7 +1,7 @@
 {
-  "name": "ultimate-discord-bot",
-  "version": "1.0.0",
-  "description": "Full moderation/custom/music/fun discord bot",
+  "name": "cottagecore-community-bot",
+  "version": "2.0.0",
+  "description": "Cottagecore Community Discord Bot",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
@@ -9,8 +9,9 @@
   "dependencies": {
     "@discordjs/voice": "^0.17.0",
     "discord.js": "^14.14.1",
-"dotenv": "^16.4.5",
+    "dotenv": "^16.4.5",
     "fs": "^0.0.1-security",
-    "play-dl": "^1.9.7"
+    "play-dl": "^1.9.7",
+    "ms": "^2.1.3"
   }
 }

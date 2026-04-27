@@ -1,1 +1,12 @@
-{}
+{
+  "1478601574673809579": {
+    "prefix": "!",
+    "welcomeChannel": null,
+    "modlogChannel": null,
+    "reviveChannel": null,
+    "bumpChannel": null,
+    "ticketCategory": "1488986356322664641",
+    "autoResponses": {},
+    "autorole": null
+  }
+}
