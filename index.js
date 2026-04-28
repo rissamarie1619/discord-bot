@@ -32,7 +32,8 @@ economy:{},
 messageCount:{},
 tickets:{},
 bumpReminder:{},
-reviveData:{}
+reviveData:{},
+cooldowns:{}
 };
 
 const BLUE = 0xbfdfff;
@@ -143,12 +144,49 @@ embeds:[cozyEmbed("╭─ ⋅𖥔⋅ ───────── ⋅𖥔⋅ ─�
 client.on("interactionCreate", async interaction => {
 if (!interaction.isButton()) return;
 
+if (interaction.customId.startsWith("role_")) {
+await interaction.deferReply({ephemeral:true});
+
+let roleName = interaction.customId.replace("role_","").replace(/_/g," ");
+
+const roleMap = {
+sheher: "she/her",
+hehim: "he/him",
+theythem: "they/them",
+"18to20": "18-20",
+"21plus": "21+"
+};
+
+if (roleMap[roleName]) roleName = roleMap[roleName];
+
+const role = interaction.guild.roles.cache.find(r => r.name.toLowerCase() === roleName.toLowerCase());
+
+if (!role) {
+return interaction.editReply({content:"Role not found in server."});
+}
+
+const member = await interaction.guild.members.fetch(interaction.user.id);
+
+try {
+if (member.roles.cache.has(role.id)) {
+await member.roles.remove(role);
+return interaction.editReply({content:`🌿 Removed role: ${role.name}`});
+} else {
+await member.roles.add(role);
+return interaction.editReply({content:`🌷 Added role: ${role.name}`});
+}
+} catch (err) {
+console.log(err);
+return interaction.editReply({content:"I couldn't manage that role. Check bot role position."});
+}
+}
+
 if (interaction.customId.startsWith("ticket_")) {
 const topic = interaction.customId.split("_")[1];
 const guildConfig = getGuildConfig(interaction.guild.id);
 
 const channel = await interaction.guild.channels.create({
-name: `ticket-${interaction.user.username}`,
+name: `${topic}-${interaction.user.username}`.toLowerCase(),
 type: ChannelType.GuildText,
 parent: guildConfig.ticketCategory || null,
 permissionOverwrites: [
@@ -234,15 +272,39 @@ return message.channel.send({embeds:[cozyEmbed("🌰 acorn pouch", `${message.au
 }
 
 if (command === "daily") {
+if (!db.cooldowns[message.author.id]) db.cooldowns[message.author.id] = {};
+
+const lastDaily = db.cooldowns[message.author.id].daily || 0;
+const diff = Date.now() - lastDaily;
+
+if (diff < 86400000) {
+const hours = Math.ceil((86400000 - diff)/3600000);
+return message.channel.send({embeds:[cozyEmbed("🌙 daily forage resting", `You may gather daily acorns again in about **${hours} hour(s)**.`, CREAM)]});
+}
+
+db.cooldowns[message.author.id].daily = Date.now();
 db.economy[message.author.id] += 100;
 saveDB();
+
 return message.channel.send({embeds:[cozyEmbed("🌤 daily forage", `You gathered **100 acorns** today.`, BLUE)]});
 }
 
 if (command === "work") {
+if (!db.cooldowns[message.author.id]) db.cooldowns[message.author.id] = {};
+
+const lastWork = db.cooldowns[message.author.id].work || 0;
+const diff = Date.now() - lastWork;
+
+if (diff < 1800000) {
+const mins = Math.ceil((1800000 - diff)/60000);
+return message.channel.send({embeds:[cozyEmbed("🍂 taking a breather", `You can work again in about **${mins} minute(s)**.`, BLUE)]});
+}
+
 const earned = Math.floor(Math.random()*80)+20;
+db.cooldowns[message.author.id].work = Date.now();
 db.economy[message.author.id] += earned;
 saveDB();
+
 return message.channel.send({embeds:[cozyEmbed("🧺 little task completed", `You earned **${earned} acorns**.`, CREAM)]});
 }
 
@@ -264,24 +326,28 @@ guildConfig.reviveChannel = message.channel.id;
 saveConfig();
 return message.channel.send("Revive channel set.");
 }
+
 if (command === "unsetrevive") {
 if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
 guildConfig.reviveChannel = null;
 saveConfig();
 return message.channel.send("Revive channel removed.");
 }
+
 if (command === "setbumpchannel") {
 if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
 guildConfig.bumpChannel = message.channel.id;
 saveConfig();
 return message.channel.send("Bump reminder channel set.");
 }
+
 if (command === "unsetbump") {
 if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
 guildConfig.bumpChannel = null;
 saveConfig();
 return message.channel.send("Bump reminder channel removed.");
 }
+
 if (command === "setticketcategory") {
 if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
 guildConfig.ticketCategory = message.channel.parentId || null;
@@ -300,6 +366,118 @@ new ButtonBuilder().setCustomId("ticket_partner").setLabel("🕊 Partnership").s
 return message.channel.send({
 embeds:[cozyEmbed("╭─ ⋅𖥔⋅ ───────── ⋅𖥔⋅ ─╮\n🎫 community help desk\n╰─ ⋅𖥔⋅ ───────── ⋅𖥔⋅ ─╯", "Choose a ticket topic below and the bot will open a private space for you.", BLUE)],
 components:[row]
+});
+}
+
+if (command === "closeticket") {
+if (
+!message.channel.name.startsWith("support-") &&
+!message.channel.name.startsWith("report-") &&
+!message.channel.name.startsWith("purchase-") &&
+!message.channel.name.startsWith("partner-")
+) return message.channel.send("This is not a ticket channel.");
+
+await message.channel.send({
+embeds:[cozyEmbed("🌙 closing ticket", "This cozy corner will close in 5 seconds.", CREAM)]
+});
+
+setTimeout(() => {
+message.channel.delete().catch(()=>{});
+}, 5000);
+
+return;
+}
+
+if (command === "notifpanel") {
+const row1 = new ActionRowBuilder().addComponents(
+new ButtonBuilder().setCustomId("role_news").setLabel("news").setStyle(ButtonStyle.Primary),
+new ButtonBuilder().setCustomId("role_events").setLabel("events").setStyle(ButtonStyle.Primary),
+new ButtonBuilder().setCustomId("role_vc").setLabel("vc").setStyle(ButtonStyle.Primary),
+new ButtonBuilder().setCustomId("role_giveaway").setLabel("giveaway").setStyle(ButtonStyle.Primary)
+);
+
+const row2 = new ActionRowBuilder().addComponents(
+new ButtonBuilder().setCustomId("role_movie_night").setLabel("movie night").setStyle(ButtonStyle.Secondary),
+new ButtonBuilder().setCustomId("role_vlogs").setLabel("vlogs").setStyle(ButtonStyle.Secondary),
+new ButtonBuilder().setCustomId("role_story_time").setLabel("story time").setStyle(ButtonStyle.Secondary),
+new ButtonBuilder().setCustomId("role_chat_revive").setLabel("chat revive").setStyle(ButtonStyle.Secondary)
+);
+
+return message.channel.send({
+embeds:[cozyEmbed("╭─ ⋅𖥔⋅ ───────── ⋅𖥔⋅ ─╮\n🔔 notification roles\n╰─ ⋅𖥔⋅ ───────── ⋅𖥔⋅ ─╯","Choose your preferred pings below.", BLUE)],
+components:[row1,row2]
+});
+}
+
+if (command === "pronounpanel") {
+const row = new ActionRowBuilder().addComponents(
+new ButtonBuilder().setCustomId("role_sheher").setLabel("she/her").setStyle(ButtonStyle.Success),
+new ButtonBuilder().setCustomId("role_hehim").setLabel("he/him").setStyle(ButtonStyle.Success),
+new ButtonBuilder().setCustomId("role_theythem").setLabel("they/them").setStyle(ButtonStyle.Success));
+
+return message.channel.send({
+embeds:[cozyEmbed("╭─ ⋅𖥔⋅ ───────── ⋅𖥔⋅ ─╮\n🌷 pronoun roles\n╰─ ⋅𖥔⋅ ───────── ⋅𖥔⋅ ─╯","Select your pronouns.", CREAM)],
+components:[row]
+});
+}
+
+if (command === "colorpanel") {
+const row1 = new ActionRowBuilder().addComponents(
+new ButtonBuilder().setCustomId("role_sage").setLabel("sage").setStyle(ButtonStyle.Primary),
+new ButtonBuilder().setCustomId("role_darker_cream").setLabel("darker cream").setStyle(ButtonStyle.Primary),
+new ButtonBuilder().setCustomId("role_mushroom").setLabel("mushroom").setStyle(ButtonStyle.Primary),
+new ButtonBuilder().setCustomId("role_sky").setLabel("sky").setStyle(ButtonStyle.Primary)
+);
+
+const row2 = new ActionRowBuilder().addComponents(
+new ButtonBuilder().setCustomId("role_rose").setLabel("rose").setStyle(ButtonStyle.Secondary),
+new ButtonBuilder().setCustomId("role_blood_red").setLabel("blood red").setStyle(ButtonStyle.Secondary),
+new ButtonBuilder().setCustomId("role_spring_colors").setLabel("spring colors").setStyle(ButtonStyle.Secondary)
+);
+
+return message.channel.send({
+embeds:[cozyEmbed("╭─ ⋅𖥔⋅ ───────── ⋅𖥔⋅ ─╮\n🎨 color roles\n╰─ ⋅𖥔⋅ ───────── ⋅𖥔⋅ ─╯","Pick your cozy color.", BLUE)],
+components:[row1,row2]
+});
+}
+
+if (command === "aestheticpanel") {
+const row1 = new ActionRowBuilder().addComponents(
+new ButtonBuilder().setCustomId("role_moonlit_soul").setLabel("moonlit soul").setStyle(ButtonStyle.Primary),
+new ButtonBuilder().setCustomId("role_sunlit_soul").setLabel("sunlit soul").setStyle(ButtonStyle.Primary),
+new ButtonBuilder().setCustomId("role_loves_nature").setLabel("loves nature").setStyle(ButtonStyle.Primary),
+new ButtonBuilder().setCustomId("role_loves_reading").setLabel("loves reading").setStyle(ButtonStyle.Primary)
+);
+
+const row2 = new ActionRowBuilder().addComponents(
+new ButtonBuilder().setCustomId("role_loves_baking").setLabel("loves baking").setStyle(ButtonStyle.Secondary),
+new ButtonBuilder().setCustomId("role_introvert").setLabel("introvert").setStyle(ButtonStyle.Secondary),
+new ButtonBuilder().setCustomId("role_extrovert").setLabel("extrovert").setStyle(ButtonStyle.Secondary),
+new ButtonBuilder().setCustomId("role_gaming").setLabel("gaming").setStyle(ButtonStyle.Secondary)
+);
+
+return message.channel.send({
+embeds:[cozyEmbed("╭─ ⋅𖥔⋅ ───────── ⋅𖥔⋅ ─╮\n🍄 aesthetic roles\n╰─ ⋅𖥔⋅ ───────── ⋅𖥔⋅ ─╯","Choose little things that fit you.", CREAM)],
+components:[row1,row2]
+});
+}
+
+if (command === "identitypanel") {
+const row1 = new ActionRowBuilder().addComponents(
+new ButtonBuilder().setCustomId("role_straight").setLabel("straight").setStyle(ButtonStyle.Primary),
+new ButtonBuilder().setCustomId("role_bisexual").setLabel("bisexual").setStyle(ButtonStyle.Primary),
+new ButtonBuilder().setCustomId("role_pansexual").setLabel("pansexual").setStyle(ButtonStyle.Primary),
+new ButtonBuilder().setCustomId("role_gay").setLabel("gay").setStyle(ButtonStyle.Primary),
+new ButtonBuilder().setCustomId("role_lesbian").setLabel("lesbian").setStyle(ButtonStyle.Primary)
+);
+
+const row2 = new ActionRowBuilder().addComponents(
+new ButtonBuilder().setCustomId("role_18to20").setLabel("18-20").setStyle(ButtonStyle.Secondary),
+new ButtonBuilder().setCustomId("role_21plus").setLabel("21+").setStyle(ButtonStyle.Secondary))
+
+return message.channel.send({
+embeds:[cozyEmbed("╭─ ⋅𖥔⋅ ───────── ⋅𖥔⋅ ─╮\n🕊 identity roles\n╰─ ⋅𖥔⋅ ───────── ⋅𖥔⋅ ─╯","Optional identity selections.", BLUE)],
+components:[row1,row2]
 });
 }
 
